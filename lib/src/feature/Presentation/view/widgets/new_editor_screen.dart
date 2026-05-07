@@ -306,6 +306,10 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
                         //when it is website
                         kIsWeb
                             ? CustomScrollView(
+                              physics:
+                                  isLoadingDone == false
+                                      ? const NeverScrollableScrollPhysics()
+                                      : null,
                               slivers: [
                                 SliverToBoxAdapter(
                                   child: Column(
@@ -665,6 +669,10 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
                                 Expanded(
                                   child: SingleChildScrollView(
                                     controller: mobileScrollController,
+                                    physics:
+                                        isLoadingDone == false
+                                            ? const NeverScrollableScrollPhysics()
+                                            : null,
                                     child: state.when(
                                       data:
                                           (data) => LayoutBuilder(
@@ -769,7 +777,9 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
     //print(_currentHeight);
     return Stack(
       children: [
-        WebViewX(
+        IgnorePointer(
+          ignoring: isLoadingDone == false,
+          child: WebViewX(
           key: ValueKey(widget.controller.toolBarKey.hashCode.toString()),
           initialContent: _initialContent,
           initialSourceType: SourceType.html,
@@ -1223,6 +1233,7 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
             androidEnableHybridComposition: true,
           ),
           //  navigationDelegate: widget.navigationDelegate,
+        ),
         ),
 
         if (isLoadingDone == false)
