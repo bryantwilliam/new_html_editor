@@ -31,6 +31,7 @@ class NewEditorScreen extends ConsumerStatefulWidget
     required this.getVideosUpdates,
     required this.videoDurationData,
     this.savedComments,
+    this.readOnly = false,
   }) : super(key: controller.editorKey);
 
   final QuillEditorController controller;
@@ -40,6 +41,7 @@ class NewEditorScreen extends ConsumerStatefulWidget
   final Map<String, dynamic> videoDurationData;
   final int videosTotalDuration;
   final dynamic savedComments;
+  final bool readOnly;
   final Function(dynamic) updateScrollProgress;
   final Function(dynamic) updateJSONComments;
   final Function(dynamic, double) updateTotalProgress;
@@ -112,7 +114,7 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
 
   double _currentHeight = 0.0;
 
-  bool isEnabled = true;
+  bool get isEnabled => !widget.readOnly;
 
   bool autofocus =
       false; // TODO: This is never set to true - clarify if it should be a widget parameter or remove
@@ -127,6 +129,16 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
 
   bool? isLoadingDone;
 
+  /// Editor JS reports it's done loading content (web: IsLoadingDone callback;
+  /// mobile: post-frame after first build). The barrier waits for this AND
+  /// [_scrollRestored] before dismissing.
+  bool _editorReady = false;
+
+  /// Saved scroll position has finished being applied (web: ScrollReady
+  /// callback awaited setScrollPosition; mobile: _waitAndJumptoSavedScrollPostion
+  /// finished its jumpTo). Combined with [_editorReady] to gate the barrier.
+  bool _scrollRestored = false;
+
   FocusNode commentFocusNode = FocusNode();
 
   late String _fontFamily;
@@ -136,6 +148,12 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
   /// Tracks whether we've already loaded the initial content into the editor.
   /// Survives parent rebuilds (unlike a widget field which gets recreated).
   bool _hasLoadedInitialContent = false;
+
+  void _maybeDismissLoadingBarrier() {
+    if (_editorReady && _scrollRestored && mounted && isLoadingDone != true) {
+      setState(() => isLoadingDone = true);
+    }
+  }
 
   @override
   void initState() {
@@ -195,6 +213,8 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
     // NOT on parent rebuilds triggered by keyboard/viewport changes.
     if (widget.editorContent != oldWidget.editorContent) {
       _hasLoadedInitialContent = false;
+      _editorReady = false;
+      _scrollRestored = false;
     }
   }
 
@@ -219,6 +239,11 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!kIsWeb && !_hasLoadedInitialContent) {
         _hasLoadedInitialContent = true;
+        if (mounted) {
+          setState(() {
+            isLoadingDone = false;
+          });
+        }
         setHtmlTextToEditor(widget.editorContent, widget.savedComments);
         _progressState.loadFromWidget(
           metaData: widget.metaData,
@@ -229,6 +254,7 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
           getVideosUpdates: widget.getVideosUpdates,
           videoDurationData: widget.videoDurationData,
         );
+        _editorReady = true;
         _waitAndJumptoSavedScrollPostion();
       }
     });
@@ -284,7 +310,7 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
                                 SliverToBoxAdapter(
                                   child: Column(
                                     children: [
-                                      toolbar(),
+                                      if (!widget.readOnly) toolbar(),
                                       if (isLoadingDone == true)
                                         ValueListenableBuilder<double>(
                                           valueListenable:
@@ -599,7 +625,7 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
                             //MOBILE VERSION EDITOR OUTLOOK
                             : Column(
                               children: [
-                                toolbar(),
+                                if (!widget.readOnly) toolbar(),
                                 ValueListenableBuilder<double>(
                                   valueListenable: _progressState.totalProgress,
                                   builder:
@@ -843,18 +869,20 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
             // which scrolls the Flutter ScrollController wrapping the webview.
             DartCallback(
               name: 'ScrollReady',
-              callBack: (message) {
-                if (message != null) {
-                  //I CAN SEND IT TO THIS PLACE FROM THE DATA LAYER...
-                  if (kIsWeb) {
-                    setScrollPosition(
-                      scrollPosition: widget.metaDataTotal['scrollPosition'],
-                    );
-                    setVideoPosition(
-                      //TODO: Get the List of videos coming from cloud Firestore and update it here.
-                      videos: widget.metaData,
+              callBack: (message) async {
+                if (message != null && kIsWeb) {
+                  final saved = widget.metaDataTotal['scrollPosition'];
+                  if (saved != null && saved is num && saved != 0) {
+                    await setScrollPosition(
+                      scrollPosition: saved.toDouble(),
                     );
                   }
+                  await setVideoPosition(
+                    //TODO: Get the List of videos coming from cloud Firestore and update it here.
+                    videos: widget.metaData,
+                  );
+                  _scrollRestored = true;
+                  _maybeDismissLoadingBarrier();
                 }
               },
             ),
@@ -1154,12 +1182,9 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
               name: 'IsLoadingDone',
               callBack: (isloadingdone) {
                 try {
-                  if (isloadingdone != null) {
-                    if (kIsWeb) {
-                      setState(() {
-                        isLoadingDone = isloadingdone as bool;
-                      });
-                    }
+                  if (isloadingdone != null && kIsWeb) {
+                    _editorReady = (isloadingdone as bool);
+                    _maybeDismissLoadingBarrier();
                   }
                 } catch (e) {}
               },
@@ -1271,11 +1296,14 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
         mobileScrollController.position.maxScrollExtent == 0.0) {
       await Future.delayed(Duration(seconds: 1));
     }
-    final scrollLength = mobileScrollController.position.maxScrollExtent;
-    final scrollRatio = widget.metaDataTotal['scrollPosition'] ?? 0.0;
-    final targetPosition = scrollLength * scrollRatio;
-    mobileScrollController.jumpTo(targetPosition);
-    // print("✅ Jumped to saved scroll position: $targetPosition");
+    if (mobileScrollController.hasClients) {
+      final scrollLength = mobileScrollController.position.maxScrollExtent;
+      final scrollRatio = widget.metaDataTotal['scrollPosition'] ?? 0.0;
+      final targetPosition = scrollLength * scrollRatio;
+      mobileScrollController.jumpTo(targetPosition);
+    }
+    _scrollRestored = true;
+    _maybeDismissLoadingBarrier();
   }
 
   // Listen to changes in the scroll position
