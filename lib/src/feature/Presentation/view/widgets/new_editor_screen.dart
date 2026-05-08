@@ -334,30 +334,6 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
                     ],
                   ),
                 ),
-              // Always-visible back button: stays reachable both while the
-              // loading barrier is up (ModalBarrier doesn't block this since
-              // the button sits on top of it in the Stack) and after the
-              // editor has finished loading. Tapping routes through
-              // Navigator.maybePop, which the host home_screen's
-              // PopScope.onPopInvokedWithResult turns into setShowWebView(false).
-              Positioned(
-                top: 8,
-                left: 8,
-                child: SafeArea(
-                  child: Material(
-                    color: Colors.black54,
-                    shape: const CircleBorder(),
-                    child: IconButton(
-                      tooltip: 'Back',
-                      icon: const Icon(
-                        Icons.arrow_back,
-                        color: Colors.white,
-                      ),
-                      onPressed: () => Navigator.of(context).maybePop(),
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
