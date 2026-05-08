@@ -151,6 +151,10 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
 
   void _maybeDismissLoadingBarrier() {
     if (_editorReady && _scrollRestored && mounted && isLoadingDone != true) {
+      // Unlock iframe scroll at the same instant the barrier dismisses, so
+      // there's no window where the visual barrier is up but mouse-wheel
+      // scrolling is already free.
+      _unlockIframeScroll();
       setState(() => isLoadingDone = true);
     }
   }
@@ -296,7 +300,33 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
             },
           ),
           //  : const SizedBox.shrink(),
-          body: Column(
+          body: Stack(
+            children: [
+              _editorBody(state),
+              if (isLoadingDone == false)
+                const Positioned.fill(
+                  child: Stack(
+                    children: [
+                      ModalBarrier(dismissible: false, color: Colors.black54),
+                      Center(
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _editorBody(AsyncValue<String> state) {
+    return Column(
             children: [
               Expanded(
                 child: LayoutBuilder(
@@ -763,10 +793,7 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
                 },
               ),
             ],
-          ),
-        ),
-      ),
-    );
+          );
   }
 
   Widget _buildEditorView({
@@ -777,9 +804,7 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
     //print(_currentHeight);
     return Stack(
       children: [
-        IgnorePointer(
-          ignoring: isLoadingDone == false,
-          child: WebViewX(
+        WebViewX(
           key: ValueKey(widget.controller.toolBarKey.hashCode.toString()),
           initialContent: _initialContent,
           initialSourceType: SourceType.html,
@@ -881,16 +906,31 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
               name: 'ScrollReady',
               callBack: (message) async {
                 if (message != null && kIsWeb) {
-                  final saved = widget.metaDataTotal['scrollPosition'];
-                  if (saved != null && saved is num && saved != 0) {
-                    await setScrollPosition(
-                      scrollPosition: saved.toDouble(),
-                    );
+                  try {
+                    final saved = widget.metaDataTotal['scrollPosition'];
+                    if (saved != null && saved is num && saved != 0) {
+                      await setScrollPosition(
+                        scrollPosition: saved.toDouble(),
+                      );
+                    }
+                    // Skip per-video position restoration when the editor is
+                    // read-only: the saved videoMap would otherwise make
+                    // `onPlayerReady` seek the YouTube player into the middle
+                    // of the video and auto-pause, leaving its controls
+                    // hidden. Position TRACKING (GetVideoTracking) still
+                    // fires from the JS side either way.
+                    if (!widget.readOnly) {
+                      await setVideoPosition(
+                        //TODO: Get the List of videos coming from cloud Firestore and update it here.
+                        videos: widget.metaData,
+                      );
+                    }
+                  } catch (e) {
+                    // Don't get stuck behind the barrier if restoration errors.
+                    debugPrint('Editor scroll/video restoration failed: $e');
                   }
-                  await setVideoPosition(
-                    //TODO: Get the List of videos coming from cloud Firestore and update it here.
-                    videos: widget.metaData,
-                  );
+                  // Unlock happens inside _maybeDismissLoadingBarrier so the
+                  // scroll lock and the visual barrier drop together.
                   _scrollRestored = true;
                   _maybeDismissLoadingBarrier();
                 }
@@ -1234,19 +1274,6 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
           ),
           //  navigationDelegate: widget.navigationDelegate,
         ),
-        ),
-
-        if (isLoadingDone == false)
-          Stack(
-            children: [
-              ModalBarrier(dismissible: false, color: Colors.black54),
-              Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              ),
-            ],
-          ),
       ],
     );
   }
@@ -1744,6 +1771,21 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
       commentId,
     ]);
   }
+
+  // The iframe's `#scrolling-container` lets the user wheel-scroll inside the
+  // article before we've restored the saved scroll position. Flutter's
+  // IgnorePointer / scroll physics don't reach into the iframe, so the lock
+  // lives in the iframe HTML itself: `getQuillPage` ships with a
+  // `<style id="scroll-lock-style">` block that pins overflow:hidden, and
+  // `_unlockIframeScroll` removes it once restoration is done.
+  Future<void> _unlockIframeScroll() async {
+    try {
+      await _webviewController?.evalRawJavascript(
+        "(function(){var s=document.getElementById('scroll-lock-style');"
+        "if(s){s.remove();}})();",
+      );
+    } catch (_) {}
+  }
 }
 
 void _printWrapper(bool showPrint, String text) {
@@ -1812,10 +1854,14 @@ class EditorProgressState {
     required Map<String, dynamic> metaData,
     required Map<String, dynamic> metaDataTotal,
   }) {
-    videoProgressMap.clear();
-    totalProgressMap.clear();
-    videoProgressMap = metaData;
-    totalProgressMap = metaDataTotal;
+    // Copy into fresh mutable maps. Two reasons:
+    // 1) the consumer can pass an unmodifiable `const {}` (e.g. when an
+    //    article is selected before its metadata futures resolve), and
+    //    later calls would `.clear()` it and crash;
+    // 2) `recordVideoPosition` writes into these maps as the user plays
+    //    videos, which would otherwise mutate the consumer's state.
+    videoProgressMap = Map<String, dynamic>.from(metaData);
+    totalProgressMap = Map<String, dynamic>.from(metaDataTotal);
   }
 
   void dispose() {

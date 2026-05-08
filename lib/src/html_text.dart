@@ -160,7 +160,15 @@ String getQuillPage({
             background-color: #fff17b;
             box-shadow:0 2px 6px rgba(249, 168, 37, 0.4);
           }
-        </style>   
+        </style>
+        <!-- Scroll lock: prevents the user from wheel-scrolling the editor
+             before the saved scroll position has been restored. The Dart
+             side removes this <style id="scroll-lock-style"> element after
+             setScrollPosition / setVideoPosition complete. -->
+        <style id="scroll-lock-style">
+          html, body { overflow: hidden !important; }
+          #scrolling-container { overflow: hidden !important; }
+        </style>
         </head>
         <body>
          <script>
