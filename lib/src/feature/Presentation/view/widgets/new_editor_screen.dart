@@ -313,14 +313,40 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
             children: [
               _editorBody(state),
               if (isLoadingDone == false)
-                const Positioned.fill(
+                Positioned.fill(
                   child: Stack(
                     children: [
-                      ModalBarrier(dismissible: false, color: Colors.black54),
-                      Center(
+                      const ModalBarrier(
+                        dismissible: false,
+                        color: Colors.black54,
+                      ),
+                      const Center(
                         child: CircularProgressIndicator(
                           valueColor: AlwaysStoppedAnimation<Color>(
                             Colors.white,
+                          ),
+                        ),
+                      ),
+                      // Bail-out button on top of the barrier so the user can
+                      // back out if the editor ever stalls. Tapping it just
+                      // routes through Navigator.maybePop, which the host's
+                      // PopScope.onPopInvokedWithResult turns into
+                      // setShowWebView(false).
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: SafeArea(
+                          child: Material(
+                            color: Colors.transparent,
+                            child: IconButton(
+                              tooltip: 'Cancel',
+                              icon: const Icon(
+                                Icons.arrow_back,
+                                color: Colors.white,
+                              ),
+                              onPressed: () =>
+                                  Navigator.of(context).maybePop(),
+                            ),
                           ),
                         ),
                       ),
