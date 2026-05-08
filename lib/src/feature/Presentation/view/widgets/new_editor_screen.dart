@@ -274,7 +274,11 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
         // even while the loading barrier is up (ModalBarrier only blocks
         // pointer events, not system/browser back).
         canPop: false,
-        onPopInvokedWithResult: (didPopUp, result) {},
+        onPopInvokedWithResult: (didPopUp, result) {
+          debugPrint(
+            '[NewEditorScreen.PopScope] fired didPop=$didPopUp result=$result',
+          );
+        },
         child: Scaffold(
           backgroundColor: Colors.white,
           resizeToAvoidBottomInset: false,
@@ -313,46 +317,47 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
             children: [
               _editorBody(state),
               if (isLoadingDone == false)
-                Positioned.fill(
+                const Positioned.fill(
                   child: Stack(
                     children: [
-                      const ModalBarrier(
+                      ModalBarrier(
                         dismissible: false,
                         color: Colors.black54,
                       ),
-                      const Center(
+                      Center(
                         child: CircularProgressIndicator(
                           valueColor: AlwaysStoppedAnimation<Color>(
                             Colors.white,
                           ),
                         ),
                       ),
-                      // Bail-out button on top of the barrier so the user can
-                      // back out if the editor ever stalls. Tapping it just
-                      // routes through Navigator.maybePop, which the host's
-                      // PopScope.onPopInvokedWithResult turns into
-                      // setShowWebView(false).
-                      Positioned(
-                        top: 8,
-                        left: 8,
-                        child: SafeArea(
-                          child: Material(
-                            color: Colors.transparent,
-                            child: IconButton(
-                              tooltip: 'Cancel',
-                              icon: const Icon(
-                                Icons.arrow_back,
-                                color: Colors.white,
-                              ),
-                              onPressed: () =>
-                                  Navigator.of(context).maybePop(),
-                            ),
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),
+              // Always-visible back button: stays reachable both while the
+              // loading barrier is up (ModalBarrier doesn't block this since
+              // the button sits on top of it in the Stack) and after the
+              // editor has finished loading. Tapping routes through
+              // Navigator.maybePop, which the host home_screen's
+              // PopScope.onPopInvokedWithResult turns into setShowWebView(false).
+              Positioned(
+                top: 8,
+                left: 8,
+                child: SafeArea(
+                  child: Material(
+                    color: Colors.black54,
+                    shape: const CircleBorder(),
+                    child: IconButton(
+                      tooltip: 'Back',
+                      icon: const Icon(
+                        Icons.arrow_back,
+                        color: Colors.white,
+                      ),
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
