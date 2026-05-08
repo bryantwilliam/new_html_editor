@@ -264,7 +264,10 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
     });
     return SafeArea(
       child: PopScope(
-        canPop: false,
+        // Allow back-navigation while the loading barrier is up so the user
+        // can bail out if the editor ever gets stuck, and unconditionally in
+        // read-only mode since there's no edit state to protect.
+        canPop: widget.readOnly || isLoadingDone != true,
         onPopInvokedWithResult: (didPopUp, result) {},
         child: Scaffold(
           backgroundColor: Colors.white,
