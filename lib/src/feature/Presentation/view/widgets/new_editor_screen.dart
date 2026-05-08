@@ -264,10 +264,16 @@ class NewEditorScreenState extends ConsumerState<NewEditorScreen> {
     });
     return SafeArea(
       child: PopScope(
-        // Allow back-navigation while the loading barrier is up so the user
-        // can bail out if the editor ever gets stuck, and unconditionally in
-        // read-only mode since there's no edit state to protect.
-        canPop: widget.readOnly || isLoadingDone != true,
+        // Keep `canPop: false` so the host (home_screen) keeps full control
+        // over closing the editor via its own `onPopInvokedWithResult` (which
+        // calls `setShowWebView(false)`). Setting this to true on Flutter web
+        // would let the root route pop and the browser would leave the page
+        // entirely. The host's callback fires regardless because PopScope
+        // delivers `onPopInvokedWithResult(didPop: false)` to all subscribers
+        // when any of them blocks pop, which already gives the user a way out
+        // even while the loading barrier is up (ModalBarrier only blocks
+        // pointer events, not system/browser back).
+        canPop: false,
         onPopInvokedWithResult: (didPopUp, result) {},
         child: Scaffold(
           backgroundColor: Colors.white,
