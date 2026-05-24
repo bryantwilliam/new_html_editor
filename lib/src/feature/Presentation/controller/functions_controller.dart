@@ -1,10 +1,10 @@
+import 'dart:async';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:new_html_editor/src/feature/Data/editor_repository.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
-part 'functions_controller.g.dart';
 
 //(keepAlive:true)
-@riverpod
-class EditorController extends _$EditorController {
+class EditorController extends AsyncNotifier<String> {
   // static SendPort? _isolateSendPort;
   @override
   FutureOr<String> build() {
@@ -63,3 +63,8 @@ class EditorController extends _$EditorController {
   //   print('This is the emitted data from the controller ${state.value}');
   // }
 }
+
+final editorControllerProvider =
+    AsyncNotifierProvider.autoDispose<EditorController, String>(
+      EditorController.new,
+    );

@@ -1,11 +1,8 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:new_html_editor_example/Domain/html_data_model.dart';
 import '../../Data/html_repo.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-part 'html_content_controller.g.dart';
-
-@riverpod
-class HtmlContentController extends _$HtmlContentController {
+class HtmlContentController extends Notifier<List<HtmlData>> {
   @override
   List<HtmlData> build() {
     return ref.read(repoProvider).getHtmlList();
@@ -55,8 +52,12 @@ class HtmlContentController extends _$HtmlContentController {
   }
 }
 
-@riverpod
-class ParamsUpateController extends _$ParamsUpateController {
+final htmlContentControllerProvider =
+    NotifierProvider.autoDispose<HtmlContentController, List<HtmlData>>(
+      HtmlContentController.new,
+    );
+
+class ParamsUpateController extends Notifier<void> {
   @override
   void build() {}
 
@@ -83,3 +84,8 @@ class ParamsUpateController extends _$ParamsUpateController {
     return await ref.read(repoProvider).updateScrollProgress(readProgress);
   }
 }
+
+final paramsUpateControllerProvider =
+    NotifierProvider.autoDispose<ParamsUpateController, void>(
+      ParamsUpateController.new,
+    );

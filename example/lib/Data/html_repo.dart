@@ -1,8 +1,6 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:new_html_editor_example/Data/dummydata.dart';
 import 'package:new_html_editor_example/Domain/html_data_model.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
-
-part 'html_repo.g.dart';
 
 class HtmlRepo {
   const HtmlRepo();
@@ -52,5 +50,4 @@ class HtmlRepo {
   /// That would be gotten in real-time.
 }
 
-@riverpod
-HtmlRepo repo(Ref ref) => HtmlRepo();
+final repoProvider = Provider.autoDispose<HtmlRepo>((ref) => HtmlRepo());

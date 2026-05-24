@@ -3,13 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:new_html_editor/src/utils/hex_color.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../new_html_editor.dart';
 import '../../utils/string_util.dart';
-part 'editor_repository.g.dart';
 
-@riverpod
-EditorRepository editorRepository(Ref ref) => const EditorRepository();
+final editorRepositoryProvider = Provider.autoDispose<EditorRepository>(
+  (ref) => const EditorRepository(),
+);
 
 class EditorRepository {
   const EditorRepository();
